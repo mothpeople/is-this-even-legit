@@ -43,9 +43,8 @@ async function analyzeJobPosting(text: string, base64Image: string | null): Prom
   const isUrlRegex = /^(https?:\/\/)?([\w\d-]+\.)+[\w\d]{2,}(\/.*)?$/i;
   const isJustUrl = isUrlRegex.test(cleanText) && !cleanText.includes(' ');
 
-  // Step 2: Job Board Intercept (Prevent Hallucinations)
+  // Step 2: Job Board Intercept
   const jobBoardRegex = /(linkedin\.com|indeed\.com|glassdoor\.com|ziprecruiter\.com|monster\.com|workday\.com|greenhouse\.io|lever\.co)/i;
-  
   if (isJustUrl && jobBoardRegex.test(cleanText)) {
     return {
       scam_probability: null,
@@ -61,23 +60,23 @@ async function analyzeJobPosting(text: string, base64Image: string | null): Prom
     };
   }
 
-  // Step 3: Local Regex Checks (Fast, Zero Cost)
+  // Step 3: Local Regex Checks
   const scamKeywords = /(kindly|telegram interview|western union|crypto wallet|guaranteed income|no experience necessary.*\$[0-9]{3,}.*hour)/i;
   const isRegexFlagged = cleanText && scamKeywords.test(cleanText);
 
-  // Step 4: Gemini API Analysis (Forensic Persona)
+  // Step 4: Gemini API Analysis
   const systemInstruction = `
     You are a Forensic Cyber-Fraud Analyst specializing in employment and recruitment scams. Your job is to analyze text or image OCR data uploaded by a user and determine the probability that the communication is a scam.
     
     Analysis Criteria (Red Flags):
     - Requests to move communication to encrypted apps (Telegram, WhatsApp, Signal).
     - Mentions of "refundable deposits," "equipment fees," or "crypto payments."
-    - Unrealistic compensation for low-skill tasks (e.g., "Earn $500/day for optimizing data").
+    - Unrealistic compensation for low-skill tasks.
     - Suspicious syntax, particularly the use of the word "Kindly."
     - Generic greetings ("Dear Applicant") combined with urgent timelines.
     - Sender email domains that attempt to spoof legitimate companies.
     
-    Tone Constraints for the Summary:
+    Tone Constraints:
     Write your summary like a factual police blotter or forensic report. Be authoritative, calm, and clinical. Do not use emojis, exclamation points, or exaggerated alarmist language.
   `;
 
@@ -87,29 +86,24 @@ async function analyzeJobPosting(text: string, base64Image: string | null): Prom
     
     CRITICAL INSTRUCTION 1: If "Is the input strictly a single URL" is true, evaluate the domain's reputation. Do NOT hallucinate specific job details.
     
-    CRITICAL INSTRUCTION 2: In the "fit_analysis" section, you MUST reference real, existing job scams out in the market (e.g., Fake Check/Equipment, Reshipping, Task/Click Farm, Identity Theft). Explicitly explain how this specific posting's patterns closely match (or completely deviate from) those known scam patterns, and how it impacts the user.
+    CRITICAL INSTRUCTION 2: In the "fit_analysis" section, you MUST reference real, existing job scams out in the market (e.g., Fake Check, Reshipping, Task/Click Farm, Identity Theft). Explicitly explain how this specific posting's patterns closely match (or completely deviate from) those known scam patterns, and how it impacts the user.
 
     Output format:
-    You must respond ONLY with a valid JSON object. Do not include markdown formatting or conversational filler.
+    Respond ONLY with a valid JSON object. Do not include markdown blocks.
     {
       "scam_probability": [Integer between 0 and 100],
       "confidence_level": ["High", "Medium", or "Low"],
-      "exhibits": [
-        "A short, punchy sentence detailing a specific red flag found (e.g., 'Sender requested conversation move to Telegram.')",
-        "Another specific red flag found."
-      ],
-      "green_flags": ["Positive forensic signs, e.g., verifiable domain, standard corporate tone."],
-      "summary": "A 2-sentence clinical summary of the findings and a recommended action.",
-      "fit_analysis": ["Point 1 detailing legitimacy and user fit", "Point 2 referencing real market scam patterns"]
+      "exhibits": ["Red flag 1", "Red flag 2"],
+      "green_flags": ["Positive forensic signs"],
+      "summary": "A 2-sentence clinical summary.",
+      "fit_analysis": ["Point 1 detailing legitimacy", "Point 2 referencing known scam patterns"]
     }
   `;
 
   const requestBody: any = {
     contents: [{
       role: "user",
-      parts: [
-        { text: prompt }
-      ]
+      parts: [{ text: prompt }]
     }],
     generationConfig: {
       responseMimeType: "application/json",
@@ -120,9 +114,12 @@ async function analyzeJobPosting(text: string, base64Image: string | null): Prom
   };
 
   if (base64Image) {
-      // FIX: Dynamically detect the actual mime type from the data URL prefix (JPEG, PNG, WEBP, etc.)
-      const match = base64Image.match(/^data:(image\/[a-zA-Z0-9]+);base64,/);
-      const mimeType = match ? match[1] : "image/jpeg"; // default to jpeg if unable to parse
+      // Parse the compressed base64 image (guaranteed to be image/jpeg from our canvas logic)
+      const match = base64Image.match(/^data:(image\/[a-zA-Z0-9+-]+);base64,/);
+      let mimeType = match ? match[1] : "image/jpeg";
+      
+      // Normalize common variations just to be safe
+      if (mimeType === 'image/jpg') mimeType = 'image/jpeg';
 
       requestBody.contents[0].parts.push({
           inlineData: {
@@ -133,7 +130,7 @@ async function analyzeJobPosting(text: string, base64Image: string | null): Prom
   }
 
   if (isRegexFlagged) {
-       requestBody.contents[0].parts[0].text += "\n\nNote: Our initial local forensic filter flagged potential scam keywords in this text. Please investigate deeply.";
+       requestBody.contents[0].parts[0].text += "\n\nNote: Our initial local forensic filter flagged potential scam keywords. Please investigate deeply.";
   }
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
@@ -145,10 +142,13 @@ async function analyzeJobPosting(text: string, base64Image: string | null): Prom
   });
 
   try {
-    const jsonText = result.candidates[0].content.parts[0].text;
+    let jsonText = result.candidates[0].content.parts[0].text;
+    
+    // Safety: Strip markdown code block formatting if Gemini ignores the prompt instruction
+    jsonText = jsonText.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+    
     const parsedData = JSON.parse(jsonText);
     
-    // Derive Legitimacy Label based on Scam Probability
     let derivedLabel = "UNKNOWN";
     if (parsedData.scam_probability !== null) {
         if (parsedData.scam_probability >= 70) derivedLabel = "SCAM";
@@ -170,7 +170,7 @@ async function analyzeJobPosting(text: string, base64Image: string | null): Prom
        summary: "failed to analyze forensic data.", 
        green_flags: [], 
        exhibits: [], 
-       fit_analysis: ["please try again."]
+       fit_analysis: ["An unexpected error occurred parsing the result. Please try again."]
     };
   }
 }
@@ -233,18 +233,50 @@ export default function App() {
     setIsDragging(false);
   }, []);
 
+  // --- Robust Image Compression for Mobile Uploads ---
   const processFile = (file: File | undefined | null) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      setError('Please upload an image file (PNG, JPG, WEBP).');
+      setError('Please upload a valid image file.');
       return;
     }
     
     setError('');
     
     const reader = new FileReader();
-    reader.onloadend = () => {
-      setImagePreview(reader.result as string);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        // Create canvas to downscale massive screenshots
+        const canvas = document.createElement('canvas');
+        const MAX_DIMENSION = 1200; // Cap image size to prevent API payload errors
+        
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height && width > MAX_DIMENSION) {
+          height *= MAX_DIMENSION / width;
+          width = MAX_DIMENSION;
+        } else if (height > MAX_DIMENSION) {
+          width *= MAX_DIMENSION / height;
+          height = MAX_DIMENSION;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        
+        // Draw image onto canvas and compress
+        ctx?.drawImage(img, 0, 0, width, height);
+        
+        // Export as optimized JPEG (0.8 quality)
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+        setImagePreview(compressedBase64);
+      };
+      
+      if (event.target?.result) {
+        img.src = event.target.result as string;
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -281,7 +313,7 @@ export default function App() {
       const analysisResult = await analyzeJobPosting(inputText, imagePreview);
       setResult(analysisResult);
     } catch (err: unknown) {
-      setError('An error occurred while analyzing the job posting. Please try again.');
+      setError('A network error occurred while analyzing the job posting. Please try again.');
       console.error(err);
     } finally {
       setIsAnalyzing(false);
@@ -326,7 +358,7 @@ export default function App() {
     : null;
 
   return (
-    <div className="min-h-screen relative font-sans text-slate-800 p-4 sm:p-8 selection:bg-blue-200 selection:text-blue-900 flex flex-col items-center">
+    <div className="min-h-screen relative font-sans text-slate-800 p-4 sm:p-8 selection:bg-blue-200 selection:text-blue-900 flex flex-col items-center overflow-x-hidden">
       
       {/* Header and Intro */}
       <div className="max-w-2xl w-full mb-8 mt-4 sm:mt-8 flex flex-col items-center justify-center text-center">
@@ -391,7 +423,7 @@ export default function App() {
 
             {error && (
               <p className="mt-4 text-pink-600 text-sm font-medium flex items-center gap-2">
-                 <AlertOctagon className="w-4 h-4" /> {error}
+                 <AlertOctagon className="w-4 h-4 flex-shrink-0" /> {error}
               </p>
             )}
 
