@@ -114,21 +114,23 @@ async function analyzeJobPosting(text: string, base64Image: string | null): Prom
   };
 
   if (base64Image) {
-      // Robustly extract the exact mimeType and base64 string
+      // Parse the compressed base64 image (guaranteed to be image/jpeg from our canvas logic)
       const match = base64Image.match(/^data:(image\/[a-zA-Z0-9+-]+);base64,/);
-      let mimeType = match ? match[1] : "image/png";
+      let mimeType = match ? match[1] : "image/jpeg";
+      
+      // Normalize common variations just to be safe
       if (mimeType === 'image/jpg') mimeType = 'image/jpeg';
       
       const dataPart = base64Image.split(',')[1];
 
-      // Ensure we don't send an empty payload if canvas rendering failed
+      // Ensure dataPart exists before pushing to prevent payload errors
       if (dataPart) {
-          requestBody.contents[0].parts.push({
-              inlineData: {
-                  mimeType: mimeType,
-                  data: dataPart 
-              }
-          });
+        requestBody.contents[0].parts.push({
+            inlineData: {
+                mimeType: mimeType,
+                data: dataPart 
+            }
+        });
       }
   }
 
@@ -252,7 +254,7 @@ export default function App() {
       img.onload = () => {
         // Create canvas to downscale massive screenshots
         const canvas = document.createElement('canvas');
-        const MAX_DIMENSION = 800; // Safer max dimension for both network payload and mobile memory limits
+        const MAX_DIMENSION = 800; // Cap image size to prevent API payload errors
         
         let width = img.width;
         let height = img.height;
@@ -276,8 +278,9 @@ export default function App() {
            ctx.drawImage(img, 0, 0, width, height);
         }
         
-        // Export strictly as PNG to match Gemini API preferences
-        const compressedBase64 = canvas.toDataURL('image/png');
+        // CRITICAL FIX: Export as highly optimized JPEG (0.6 quality). 
+        // PNG creates massive Base64 strings (lossless) which crashes mobile fetch requests due to payload size limits.
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
         
         // Mobile Safari Fallback: If canvas failed to draw (returns empty data URL), use raw image
         if (compressedBase64 && compressedBase64 !== 'data:,') {
