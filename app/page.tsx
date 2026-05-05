@@ -15,10 +15,7 @@ interface AnalysisResult {
 }
 
 // --- API Configuration & Helper Functions ---
-// ⚠️ VERCEL DEPLOYMENT INSTRUCTION:
-// Change the line below in your actual project to:
-// const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-const apiKey = ""; // Provided by execution environment
+const apiKey = ""; 
 
 // Exponential Backoff Fetch for Gemini API
 async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise<any> {
@@ -28,7 +25,7 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3)
       const response = await fetch(url, options);
       if (!response.ok) {
         const errorData = await response.text();
-        // Fail immediately for 400-level Bad Requests (retrying won't fix a bad payload/key)
+        // Fail immediately for 400-level Bad Requests
         if (response.status >= 400 && response.status < 500) {
             throw new Error(`API Error (${response.status}): ${errorData}`);
         }
@@ -36,7 +33,6 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3)
       }
       return await response.json();
     } catch (error: any) {
-      // If it's a payload error or we run out of retries, throw it up to the UI
       if (error.message.startsWith('API Error') || i === maxRetries - 1) {
           throw error;
       }
@@ -125,19 +121,17 @@ async function analyzeJobPosting(text: string, base64Image: string | null): Prom
   };
 
   if (base64Image) {
-      // Robustly extract the exact mimeType and base64 string using index splits instead of fragile regex
       const commaIndex = base64Image.indexOf(',');
       if (commaIndex !== -1) {
           const header = base64Image.substring(0, commaIndex);
           const dataPart = base64Image.substring(commaIndex + 1);
           
-          let mimeType = 'image/jpeg'; // Safe fallback
+          let mimeType = 'image/jpeg'; 
           const mimeMatch = header.match(/data:([^;]+);/);
           if (mimeMatch && mimeMatch[1]) {
               mimeType = mimeMatch[1];
           }
           
-          // Normalize common variations
           if (mimeType === 'image/jpg') mimeType = 'image/jpeg';
 
           if (dataPart) {
@@ -165,8 +159,6 @@ async function analyzeJobPosting(text: string, base64Image: string | null): Prom
 
   try {
     let jsonText = result.candidates[0].content.parts[0].text;
-    
-    // Safety: Strip markdown code block formatting if Gemini ignores the prompt instruction
     jsonText = jsonText.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
     
     const parsedData = JSON.parse(jsonText);
@@ -244,7 +236,6 @@ export default function App() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // --- Drag and Drop Handlers ---
   const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragging(true);
@@ -255,7 +246,6 @@ export default function App() {
     setIsDragging(false);
   }, []);
 
-  // --- Bulletproof Image Engine for Mobile Uploads ---
   const processFile = (file: File | undefined | null) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
@@ -264,7 +254,7 @@ export default function App() {
     }
     
     setError('');
-    setImagePreview(null); // Reset preview to prevent stale renders
+    setImagePreview(null);
     
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -273,7 +263,6 @@ export default function App() {
       const img = new Image();
       img.onload = () => {
         try {
-          // Attempt canvas downscaling for network efficiency
           const canvas = document.createElement('canvas');
           const MAX_DIMENSION = 1000; 
           
@@ -298,24 +287,20 @@ export default function App() {
              ctx.drawImage(img, 0, 0, width, height);
              const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
              
-             // Verify compression succeeded (sometimes mobile Safari returns "data:,")
              if (compressedBase64 && compressedBase64.length > 50) {
                  setImagePreview(compressedBase64);
              } else {
-                 setImagePreview(rawDataUrl); // Fallback to raw
+                 setImagePreview(rawDataUrl); 
              }
           } else {
-             setImagePreview(rawDataUrl); // Fallback to raw if canvas context fails
+             setImagePreview(rawDataUrl); 
           }
         } catch (e) {
-          // Absolute fallback if mobile memory limits block canvas manipulation
           setImagePreview(rawDataUrl);
         }
       };
       
       img.onerror = () => {
-        // Fallback for formats not supported by standard HTML Image() like HEIC 
-        // FileReader parses them fine, so we send the raw data straight to the API
         setImagePreview(rawDataUrl);
       };
       
@@ -341,7 +326,6 @@ export default function App() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // --- Analysis Trigger ---
   const handleAnalyze = async () => {
     if (!inputText.trim() && !imagePreview) {
       setError('Please provide text, a URL, or an image to analyze.');
@@ -356,7 +340,6 @@ export default function App() {
       const analysisResult = await analyzeJobPosting(inputText, imagePreview);
       setResult(analysisResult);
     } catch (err: any) {
-      // Expose the exact API error to the UI instead of a generic message
       setError(err.message || 'A network error occurred while analyzing the job posting.');
       console.error(err);
     } finally {
@@ -396,7 +379,6 @@ export default function App() {
     }
   };
 
-  // Calculate Legitimacy Index (Inverting the scam probability)
   const legitimacyIndex = result && result.scam_probability !== null 
     ? 100 - result.scam_probability 
     : null;
