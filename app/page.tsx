@@ -15,7 +15,7 @@ interface AnalysisResult {
 }
 
 // --- API Configuration & Helper Functions ---
-const apiKey = ""; 
+const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY; 
 
 // Exponential Backoff Fetch for Gemini API
 async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise<any> {
