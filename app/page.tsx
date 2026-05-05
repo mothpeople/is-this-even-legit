@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useCallback } from 'react';
-import { AlertOctagon, UploadCloud, X, Search, Lock, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { AlertOctagon, UploadCloud, X, Search, Lock, Loader2, ChevronDown, ChevronUp, FileText } from 'lucide-react';
 
 // --- Types & Interfaces ---
 interface AnalysisResult {
@@ -14,183 +14,40 @@ interface AnalysisResult {
   fit_analysis: string[] | string;
 }
 
-// --- API Configuration & Helper Functions ---
-// ⚠️ VERCEL DEPLOYMENT INSTRUCTIONS ⚠️
-// When pasting this into your local code for Vercel, you MUST make these two manual changes:
-// 1. Change the apiKey below to: const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-// 2. Change the fetch URL (around line 122) to use "gemini-2.5-flash" instead of the preview model.
-
-const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY; 
-
-// Exponential Backoff Fetch for Gemini API
-async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise<any> {
-  let delay = 1000;
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      const response = await fetch(url, options);
-      if (!response.ok) {
-        const errorData = await response.text();
-        if (response.status >= 400 && response.status < 500) {
-            throw new Error(`API Error (${response.status}): ${errorData}`);
-        }
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return await response.json();
-    } catch (error: any) {
-      if (error.message && error.message.startsWith('API Error') || i === maxRetries - 1) {
-          throw error;
-      }
-      await new Promise(resolve => setTimeout(resolve, delay));
-      delay *= 2;
-    }
-  }
-}
-
-// Simulated Next.js Edge Function Route Handler Logic
+// --- Backend API Connection ---
+// This safely calls your Next.js backend (route.ts), completely hiding your API keys
+// and leveraging your URL scraper and Claude Fallback logic that already works.
 async function analyzeJobPosting(text: string, base64Image: string | null): Promise<AnalysisResult> {
-  const cleanText = (text || "").trim();
-  
-  // Step 1: Detect if input is strictly a URL
-  const isUrlRegex = /^(https?:\/\/)?([\w\d-]+\.)+[\w\d]{2,}(\/.*)?$/i;
-  const isJustUrl = isUrlRegex.test(cleanText) && !cleanText.includes(' ');
-
-  // Step 2: Job Board Intercept
-  const jobBoardRegex = /(linkedin\.com|indeed\.com|glassdoor\.com|ziprecruiter\.com|monster\.com|workday\.com|greenhouse\.io|lever\.co)/i;
-  if (isJustUrl && jobBoardRegex.test(cleanText)) {
-    return {
-      scam_probability: null,
-      confidence_level: "Low",
-      derived_legitimacy: "UNKNOWN",
-      summary: "i can't access external job boards directly to read the posting.",
-      green_flags: [],
-      exhibits: ["cannot scrape job board links."],
-      fit_analysis: [
-        "please copy and paste the full job description text or upload a screenshot of the listing.",
-        "this helps me properly assess the forensic details."
-      ]
-    };
-  }
-
-  // Step 3: Local Regex Checks
-  const scamKeywords = /(kindly|telegram interview|western union|crypto wallet|guaranteed income|no experience necessary.*\$[0-9]{3,}.*hour)/i;
-  const isRegexFlagged = cleanText && scamKeywords.test(cleanText);
-
-  // Step 4: Gemini API Analysis
-  const systemInstruction = `
-    You are a Forensic Cyber-Fraud Analyst specializing in employment and recruitment scams. Your job is to analyze text or image OCR data uploaded by a user and determine the probability that the communication is a scam.
-    
-    Analysis Criteria (Red Flags):
-    - Requests to move communication to encrypted apps (Telegram, WhatsApp, Signal).
-    - Mentions of "refundable deposits," "equipment fees," or "crypto payments."
-    - Unrealistic compensation for low-skill tasks.
-    - Suspicious syntax, particularly the use of the word "Kindly."
-    - Generic greetings ("Dear Applicant") combined with urgent timelines.
-    - Sender email domains that attempt to spoof legitimate companies.
-    
-    Tone Constraints:
-    Write your summary like a factual police blotter or forensic report. Be authoritative, calm, and clinical. Do not use emojis, exclamation points, or exaggerated alarmist language.
-  `;
-
-  const prompt = `
-    Input Data: ${cleanText || "See attached image."}
-    Is the input strictly a single URL?: ${isJustUrl}
-    
-    CRITICAL INSTRUCTION 1: If "Is the input strictly a single URL" is true, evaluate the domain's reputation. Do NOT hallucinate specific job details.
-    
-    CRITICAL INSTRUCTION 2: In the "fit_analysis" section, you MUST reference real, existing job scams out in the market (e.g., Fake Check, Reshipping, Task/Click Farm, Identity Theft). Explicitly explain how this specific posting's patterns closely match (or completely deviate from) those known scam patterns, and how it impacts the user.
-
-    Output format:
-    Respond ONLY with a valid JSON object. Do not include markdown blocks.
-    {
-      "scam_probability": [Integer between 0 and 100],
-      "confidence_level": ["High", "Medium", or "Low"],
-      "exhibits": ["Red flag 1", "Red flag 2"],
-      "green_flags": ["Positive forensic signs"],
-      "summary": "A 2-sentence clinical summary.",
-      "fit_analysis": ["Point 1 detailing legitimacy", "Point 2 referencing known scam patterns"]
-    }
-  `;
-
-  const requestBody: any = {
-    contents: [{
-      role: "user",
-      parts: [{ text: prompt }]
-    }],
-    generationConfig: {
-      responseMimeType: "application/json",
-    },
-    systemInstruction: {
-      parts: [{ text: systemInstruction }]
-    }
-  };
-
-  if (base64Image) {
-      const commaIndex = base64Image.indexOf(',');
-      if (commaIndex !== -1) {
-          const header = base64Image.substring(0, commaIndex);
-          const dataPart = base64Image.substring(commaIndex + 1);
-          
-          let mimeType = 'image/jpeg'; 
-          const mimeMatch = header.match(/data:([^;]+);/);
-          if (mimeMatch && mimeMatch[1]) {
-              mimeType = mimeMatch[1];
-          }
-          
-          if (mimeType === 'image/jpg') mimeType = 'image/jpeg';
-
-          if (dataPart) {
-            requestBody.contents[0].parts.push({
-                inlineData: {
-                    mimeType: mimeType,
-                    data: dataPart 
-                }
-            });
-          }
-      }
-  }
-
-  if (isRegexFlagged) {
-       requestBody.contents[0].parts[0].text += "\n\nNote: Our initial local forensic filter flagged potential scam keywords. Please investigate deeply.";
-  }
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-  
-  const result = await fetchWithRetry(url, {
+  const response = await fetch('/api/analyze', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(requestBody)
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      text: text,
+      imageBase64: base64Image // Matches the exact extraction in your route.ts
+    })
   });
 
-  try {
-    let jsonText = result.candidates[0].content.parts[0].text;
-    jsonText = jsonText.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
-    
-    const parsedData = JSON.parse(jsonText);
-    
-    let derivedLabel = "UNKNOWN";
-    if (parsedData.scam_probability !== null) {
-        if (parsedData.scam_probability >= 70) derivedLabel = "SCAM";
-        else if (parsedData.scam_probability >= 30) derivedLabel = "SUSPICIOUS";
-        else derivedLabel = "LEGIT";
-    }
-
-    return {
-        ...parsedData,
-        derived_legitimacy: derivedLabel
-    };
-
-  } catch (e) {
-    console.error("Failed to parse Gemini response", e);
-    return {
-       scam_probability: 0, 
-       confidence_level: "Low",
-       derived_legitimacy: "ERROR", 
-       summary: "failed to analyze forensic data.", 
-       green_flags: [], 
-       exhibits: [], 
-       fit_analysis: ["An unexpected error occurred parsing the result. Please try again."]
-    };
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || `Backend Error: ${response.status}`);
   }
+
+  const data = await response.json();
+  
+  // Ensure the frontend derives the exact label based on the backend's score
+  let derivedLabel = "UNKNOWN";
+  if (data.scam_probability !== null && data.scam_probability !== undefined) {
+      if (data.scam_probability >= 70) derivedLabel = "SCAM";
+      else if (data.scam_probability >= 30) derivedLabel = "SUSPICIOUS";
+      else derivedLabel = "LEGIT";
+  }
+
+  return {
+      ...data,
+      derived_legitimacy: derivedLabel
+  };
 }
 
 // --- Known Scams Data ---
@@ -250,10 +107,15 @@ export default function App() {
     setIsDragging(false);
   }, []);
 
+  // Client-side image compression & file handler
   const processFile = (file: File | undefined | null) => {
     if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      setError('Please upload a valid image file.');
+    
+    const isImage = file.type.startsWith('image/');
+    const isPdf = file.type === 'application/pdf';
+
+    if (!isImage && !isPdf) {
+      setError('Please upload a valid image or PDF file.');
       return;
     }
     
@@ -264,6 +126,13 @@ export default function App() {
     reader.onload = (event) => {
       const rawDataUrl = event.target?.result as string;
       
+      // If it is a PDF, bypass the image canvas compression completely
+      if (isPdf) {
+        setImagePreview(rawDataUrl);
+        return;
+      }
+      
+      // Otherwise, compress the image for mobile network efficiency
       const img = new Image();
       img.onload = () => {
         try {
@@ -332,7 +201,7 @@ export default function App() {
 
   const handleAnalyze = async () => {
     if (!inputText.trim() && !imagePreview) {
-      setError('Please provide text, a URL, or an image to analyze.');
+      setError('Please provide text, a URL, or a file to analyze.');
       return;
     }
     
@@ -344,7 +213,7 @@ export default function App() {
       const analysisResult = await analyzeJobPosting(inputText, imagePreview);
       setResult(analysisResult);
     } catch (err: any) {
-      setError(err.message || 'A network error occurred while analyzing the job posting.');
+      setError(err.message || 'A network error occurred while reaching your backend server.');
       console.error(err);
     } finally {
       setIsAnalyzing(false);
@@ -427,20 +296,27 @@ export default function App() {
 
             <textarea
               className="w-full bg-transparent resize-none outline-none text-lg sm:text-xl placeholder-slate-400 min-h-[120px] sm:min-h-[100px] leading-relaxed"
-              placeholder="Paste a URL, job description, or email message. Or upload a screenshot below..."
+              placeholder="Paste a URL, job description, or email message. Or upload a screenshot or PDF below..."
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               disabled={isAnalyzing}
             />
 
-            {/* Image Preview Area */}
+            {/* Preview Area (Handles Image AND PDF) */}
             {imagePreview && (
               <div className="relative mt-4 inline-block">
-                <img 
-                  src={imagePreview} 
-                  alt="Job posting snippet" 
-                  className="h-32 object-cover rounded-xl border border-slate-200 shadow-sm"
-                />
+                {imagePreview.startsWith('data:application/pdf') ? (
+                  <div className="h-32 w-32 bg-slate-100 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center justify-center text-slate-500 gap-2">
+                    <FileText className="w-8 h-8 text-blue-500" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-600">PDF Attached</span>
+                  </div>
+                ) : (
+                  <img 
+                    src={imagePreview} 
+                    alt="Job posting snippet" 
+                    className="h-32 object-cover rounded-xl border border-slate-200 shadow-sm"
+                  />
+                )}
                 <button 
                   onClick={removeImage}
                   className="absolute -top-2 -right-2 bg-slate-800 text-white p-1.5 rounded-full hover:bg-pink-500 transition-colors shadow-md"
@@ -462,7 +338,7 @@ export default function App() {
               <div className="w-full sm:w-auto">
                 <input 
                   type="file" 
-                  accept="image/*" 
+                  accept="image/*,application/pdf" 
                   className="hidden" 
                   ref={fileInputRef}
                   onChange={handleFileSelect}
@@ -474,7 +350,7 @@ export default function App() {
                   disabled={isAnalyzing}
                 >
                   <UploadCloud className="w-5 h-5" />
-                  <span>UPLOAD SCREENSHOT</span>
+                  <span>UPLOAD FILE / PDF</span>
                 </button>
               </div>
               
