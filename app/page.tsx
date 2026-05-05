@@ -18,17 +18,25 @@ interface AnalysisResult {
 const apiKey = ""; // Provided by execution environment
 
 // Exponential Backoff Fetch for Gemini API
-async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 5): Promise<any> {
+async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise<any> {
   let delay = 1000;
   for (let i = 0; i < maxRetries; i++) {
     try {
       const response = await fetch(url, options);
       if (!response.ok) {
+        const errorData = await response.text();
+        // Fail immediately for 400-level Bad Requests (retrying won't fix a bad payload)
+        if (response.status >= 400 && response.status < 500) {
+            throw new Error(`API Error (${response.status}): ${errorData}`);
+        }
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       return await response.json();
-    } catch (error) {
-      if (i === maxRetries - 1) throw error;
+    } catch (error: any) {
+      // If it's a payload error or we run out of retries, throw it up to the UI
+      if (error.message.startsWith('API Error') || i === maxRetries - 1) {
+          throw error;
+      }
       await new Promise(resolve => setTimeout(resolve, delay));
       delay *= 2;
     }
@@ -114,23 +122,29 @@ async function analyzeJobPosting(text: string, base64Image: string | null): Prom
   };
 
   if (base64Image) {
-      // Parse the compressed base64 image (guaranteed to be image/jpeg from our canvas logic)
-      const match = base64Image.match(/^data:(image\/[a-zA-Z0-9+-]+);base64,/);
-      let mimeType = match ? match[1] : "image/jpeg";
-      
-      // Normalize common variations just to be safe
-      if (mimeType === 'image/jpg') mimeType = 'image/jpeg';
-      
-      const dataPart = base64Image.split(',')[1];
+      // Robustly extract the exact mimeType and base64 string using index splits instead of fragile regex
+      const commaIndex = base64Image.indexOf(',');
+      if (commaIndex !== -1) {
+          const header = base64Image.substring(0, commaIndex);
+          const dataPart = base64Image.substring(commaIndex + 1);
+          
+          let mimeType = 'image/jpeg'; // Safe fallback
+          const mimeMatch = header.match(/data:([^;]+);/);
+          if (mimeMatch && mimeMatch[1]) {
+              mimeType = mimeMatch[1];
+          }
+          
+          // Normalize common variations
+          if (mimeType === 'image/jpg') mimeType = 'image/jpeg';
 
-      // Ensure dataPart exists before pushing to prevent payload errors
-      if (dataPart) {
-        requestBody.contents[0].parts.push({
-            inlineData: {
-                mimeType: mimeType,
-                data: dataPart 
-            }
-        });
+          if (dataPart) {
+            requestBody.contents[0].parts.push({
+                inlineData: {
+                    mimeType: mimeType,
+                    data: dataPart 
+                }
+            });
+          }
       }
   }
 
@@ -238,7 +252,7 @@ export default function App() {
     setIsDragging(false);
   }, []);
 
-  // --- Robust Image Compression for Mobile Uploads ---
+  // --- Bulletproof Image Engine for Mobile Uploads ---
   const processFile = (file: File | undefined | null) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
@@ -247,52 +261,62 @@ export default function App() {
     }
     
     setError('');
+    setImagePreview(null); // Reset preview to prevent stale renders
     
     const reader = new FileReader();
     reader.onload = (event) => {
+      const rawDataUrl = event.target?.result as string;
+      
       const img = new Image();
       img.onload = () => {
-        // Create canvas to downscale massive screenshots
-        const canvas = document.createElement('canvas');
-        const MAX_DIMENSION = 800; // Cap image size to prevent API payload errors
-        
-        let width = img.width;
-        let height = img.height;
+        try {
+          // Attempt canvas downscaling for network efficiency
+          const canvas = document.createElement('canvas');
+          const MAX_DIMENSION = 1000; 
+          
+          let width = img.width;
+          let height = img.height;
 
-        if (width > height && width > MAX_DIMENSION) {
-          height *= MAX_DIMENSION / width;
-          width = MAX_DIMENSION;
-        } else if (height > MAX_DIMENSION) {
-          width *= MAX_DIMENSION / height;
-          height = MAX_DIMENSION;
-        }
+          if (width > height && width > MAX_DIMENSION) {
+            height = Math.round(height * (MAX_DIMENSION / width));
+            width = MAX_DIMENSION;
+          } else if (height > MAX_DIMENSION) {
+            width = Math.round(width * (MAX_DIMENSION / height));
+            height = MAX_DIMENSION;
+          }
 
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        
-        if (ctx) {
-           // Safely fill white background to prevent transparency artifacts
-           ctx.fillStyle = '#FFFFFF';
-           ctx.fillRect(0, 0, width, height);
-           ctx.drawImage(img, 0, 0, width, height);
-        }
-        
-        // CRITICAL FIX: Export as highly optimized JPEG (0.6 quality). 
-        // PNG creates massive Base64 strings (lossless) which crashes mobile fetch requests due to payload size limits.
-        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
-        
-        // Mobile Safari Fallback: If canvas failed to draw (returns empty data URL), use raw image
-        if (compressedBase64 && compressedBase64 !== 'data:,') {
-            setImagePreview(compressedBase64);
-        } else {
-            setImagePreview(event.target?.result as string);
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          
+          if (ctx) {
+             ctx.fillStyle = '#FFFFFF';
+             ctx.fillRect(0, 0, width, height);
+             ctx.drawImage(img, 0, 0, width, height);
+             const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+             
+             // Verify compression succeeded (sometimes mobile Safari returns "data:,")
+             if (compressedBase64 && compressedBase64.length > 50) {
+                 setImagePreview(compressedBase64);
+             } else {
+                 setImagePreview(rawDataUrl); // Fallback to raw
+             }
+          } else {
+             setImagePreview(rawDataUrl); // Fallback to raw if canvas context fails
+          }
+        } catch (e) {
+          // Absolute fallback if mobile memory limits block canvas manipulation
+          setImagePreview(rawDataUrl);
         }
       };
       
-      if (event.target?.result) {
-        img.src = event.target.result as string;
-      }
+      img.onerror = () => {
+        // Fallback for formats not supported by standard HTML Image() like HEIC 
+        // FileReader parses them fine, so we send the raw data straight to the API
+        setImagePreview(rawDataUrl);
+      };
+      
+      img.src = rawDataUrl;
     };
     reader.readAsDataURL(file);
   };
@@ -328,8 +352,9 @@ export default function App() {
     try {
       const analysisResult = await analyzeJobPosting(inputText, imagePreview);
       setResult(analysisResult);
-    } catch (err: unknown) {
-      setError('A network error occurred while analyzing the job posting. Please try again.');
+    } catch (err: any) {
+      // Expose the exact API error to the UI instead of a generic message
+      setError(err.message || 'A network error occurred while analyzing the job posting.');
       console.error(err);
     } finally {
       setIsAnalyzing(false);
@@ -438,8 +463,8 @@ export default function App() {
             )}
 
             {error && (
-              <p className="mt-4 text-pink-600 text-sm font-medium flex items-center gap-2">
-                 <AlertOctagon className="w-4 h-4 flex-shrink-0" /> {error}
+              <p className="mt-4 text-pink-600 text-sm font-medium flex items-start sm:items-center gap-2">
+                 <AlertOctagon className="w-4 h-4 flex-shrink-0 mt-0.5 sm:mt-0" /> <span className="break-words">{error}</span>
               </p>
             )}
 
