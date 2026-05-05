@@ -120,9 +120,13 @@ async function analyzeJobPosting(text: string, base64Image: string | null): Prom
   };
 
   if (base64Image) {
+      // FIX: Dynamically detect the actual mime type from the data URL prefix (JPEG, PNG, WEBP, etc.)
+      const match = base64Image.match(/^data:(image\/[a-zA-Z0-9]+);base64,/);
+      const mimeType = match ? match[1] : "image/jpeg"; // default to jpeg if unable to parse
+
       requestBody.contents[0].parts.push({
           inlineData: {
-              mimeType: "image/png", 
+              mimeType: mimeType,
               data: base64Image.split(',')[1] 
           }
       });
@@ -232,7 +236,7 @@ export default function App() {
   const processFile = (file: File | undefined | null) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      setError('Please upload an image file (PNG, JPG).');
+      setError('Please upload an image file (PNG, JPG, WEBP).');
       return;
     }
     
@@ -360,7 +364,7 @@ export default function App() {
             </div>
 
             <textarea
-              className="w-full bg-transparent resize-none outline-none text-lg sm:text-xl placeholder-slate-400 min-h-[180px] sm:min-h-[140px] leading-relaxed"
+              className="w-full bg-transparent resize-none outline-none text-lg sm:text-xl placeholder-slate-400 min-h-[120px] sm:min-h-[100px] leading-relaxed"
               placeholder="Paste a URL, job description, or email message. Or upload a screenshot below..."
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
