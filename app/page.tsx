@@ -15,6 +15,11 @@ interface AnalysisResult {
 }
 
 // --- API Configuration & Helper Functions ---
+// ⚠️ VERCEL DEPLOYMENT INSTRUCTIONS ⚠️
+// When pasting this into your local code for Vercel, you MUST make these two manual changes:
+// 1. Change the apiKey below to: const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+// 2. Change the fetch URL (around line 122) to use "gemini-2.5-flash" instead of the preview model.
+
 const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY; 
 
 // Exponential Backoff Fetch for Gemini API
@@ -25,7 +30,6 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3)
       const response = await fetch(url, options);
       if (!response.ok) {
         const errorData = await response.text();
-        // Fail immediately for 400-level Bad Requests
         if (response.status >= 400 && response.status < 500) {
             throw new Error(`API Error (${response.status}): ${errorData}`);
         }
@@ -33,7 +37,7 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3)
       }
       return await response.json();
     } catch (error: any) {
-      if (error.message.startsWith('API Error') || i === maxRetries - 1) {
+      if (error.message && error.message.startsWith('API Error') || i === maxRetries - 1) {
           throw error;
       }
       await new Promise(resolve => setTimeout(resolve, delay));
@@ -149,7 +153,7 @@ async function analyzeJobPosting(text: string, base64Image: string | null): Prom
        requestBody.contents[0].parts[0].text += "\n\nNote: Our initial local forensic filter flagged potential scam keywords. Please investigate deeply.";
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
   
   const result = await fetchWithRetry(url, {
     method: 'POST',
