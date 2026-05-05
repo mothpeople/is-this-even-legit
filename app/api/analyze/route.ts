@@ -74,14 +74,14 @@ export async function POST(req: Request) {
     const scamKeywords = /(kindly|telegram interview|western union|crypto wallet|guaranteed income|no experience necessary.*\$[0-9]{3,}.*hour)/i;
     const isRegexFlagged = cleanText && scamKeywords.test(cleanText);
 
-    // --- STRONGER ZERO-TRUST DIRECTIVES ---
+    // --- ANTI-SPOOFING ZERO-TRUST DIRECTIVES ---
     const systemInstruction = `
       You are an Elite Forensic Cyber-Fraud Analyst. You operate with a STRICT ZERO-TRUST POSTURE.
       
       Deep Analysis Criteria:
-      1. Stage 1 Pre-Funnel Scams (CRITICAL): If an outreach is deliberately vague (no specific role, no compensation details) AND comes from a high-risk sector (Web3, Crypto, Data Entry), treat it as a HIGH PROBABILITY SCAM. Do not give it a pass just because they haven't asked for money yet.
-      2. False Framing: Unsolicited emails starting with "Thank you for applying" or "Saw your profile" without specifics are classic social engineering tactics.
-      3. Domain Forensics: We have provided scraped website text and Safe Browsing data below (if applicable). Use this to verify legitimacy.
+      1. THE IMPERSONATION/SPOOFING VECTOR (CRITICAL): Scammers impersonate real, verifiable companies. Even if the company mentioned (e.g., DeArk, Google, Amazon) is 100% real, if the email itself is unsolicited, vague, or uses false framing, assume it is an IMPERSONATOR. Do NOT lower the scam probability just because the company exists.
+      2. Stage 1 Pre-Funnel Scams (CRITICAL): If an outreach is deliberately vague (no specific role, no compensation details) AND comes from a high-risk sector (Web3, Crypto, Data Entry), treat it as a HIGH PROBABILITY SCAM. 
+      3. False Framing: Unsolicited emails starting with "Thank you for applying" or "Saw your profile" without specifics are classic social engineering tactics designed to lower the target's guard.
       
       Tone: Factual police blotter, authoritative, calm, and clinical.
     `;
@@ -92,14 +92,14 @@ export async function POST(req: Request) {
       Scraped Website Text (if URL): ${scrapedContent || "N/A"}
       Hard Forensic Data: ${threatIntel || "N/A"}
       
-      CRITICAL INSTRUCTION 1: Evaluate the entities mentioned against known scam patterns. Be ruthless. Vague outreach in Web3/Crypto is almost always malicious.
+      CRITICAL INSTRUCTION 1: Evaluate the communication tactics, NOT just the entity. Vague outreach utilizing false familiarity ("Thanks for applying") in the Web3 sector is a massive red flag for a Stage 1 Spoofing Scam.
       
-      CRITICAL INSTRUCTION 2: In the "fit_analysis" section, explain how this posting's patterns match known scams. Based on my user profile, evaluate if this fits me and what legitimate benefits I could get (or if it's purely a trap).
+      CRITICAL INSTRUCTION 2: In the "fit_analysis" section, explicitly warn if this appears to be an impersonation of a real company. Based on my user profile, evaluate if this fits me and what legitimate benefits I could get (or if it's purely a trap).
 
       Output format:
       You must respond ONLY with a valid JSON object. Do not include markdown formatting like \`\`\`json.
       {
-        "scam_probability": [Integer between 0 and 100. STRICT SCORING: 100 = blatant scam. 75-99 = highly suspicious / stage 1 funnel (vague web3 emails go here!). 0 = 100% verified household-name corporation],
+        "scam_probability": [Integer between 0 and 100. STRICT SCORING: 100 = blatant scam/spoof. 75-99 = highly suspicious / stage 1 funnel / impersonation attempt. 0 = 100% verified authentic sender AND safe content.],
         "confidence_level": ["High", "Medium", or "Low"],
         "exhibits": [
           "A short, punchy sentence detailing a specific red flag / con found",
@@ -107,7 +107,7 @@ export async function POST(req: Request) {
         ],
         "green_flags": ["Positive forensic signs / pros found. (Leave empty if none)."],
         "summary": "A 2-sentence clinical summary of your findings and a recommended action.",
-        "fit_analysis": ["Point 1 detailing legitimacy, user fit, and potential benefits", "Point 2 referencing scam patterns"]
+        "fit_analysis": ["Point 1 detailing legitimacy, user fit, and potential benefits", "Point 2 referencing scam/spoofing patterns"]
       }
     `;
 
@@ -159,7 +159,7 @@ export async function POST(req: Request) {
       return NextResponse.json(JSON.parse(jsonText));
 
     } catch (primaryError) {
-      console.warn("Google Gemini failed. Falling back to Anthropic Claude 4.6 Sonnet...", primaryError);
+      console.warn("Google Gemini failed. Falling back to Anthropic Claude...", primaryError);
       
       const claudeApiKey = process.env.CLAUDE_API_KEY;
       if (!claudeApiKey) throw new Error("Both Gemini failed and Claude API key is missing.");
@@ -201,11 +201,8 @@ export async function POST(req: Request) {
       let jsonText = claudeData.content[0].text;
       
       jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      const parsedData = JSON.parse(jsonText);
       
-      // Note removed here for a silent, seamless fallback experience!
-
-      return NextResponse.json(parsedData);
+      return NextResponse.json(JSON.parse(jsonText));
     }
 
   } catch (error: any) {
