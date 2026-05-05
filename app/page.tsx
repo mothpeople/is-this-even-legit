@@ -15,6 +15,9 @@ interface AnalysisResult {
 }
 
 // --- API Configuration & Helper Functions ---
+// ⚠️ VERCEL DEPLOYMENT INSTRUCTION:
+// Change the line below in your actual project to:
+// const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 const apiKey = ""; // Provided by execution environment
 
 // Exponential Backoff Fetch for Gemini API
@@ -25,7 +28,7 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3)
       const response = await fetch(url, options);
       if (!response.ok) {
         const errorData = await response.text();
-        // Fail immediately for 400-level Bad Requests (retrying won't fix a bad payload)
+        // Fail immediately for 400-level Bad Requests (retrying won't fix a bad payload/key)
         if (response.status >= 400 && response.status < 500) {
             throw new Error(`API Error (${response.status}): ${errorData}`);
         }
