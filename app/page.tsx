@@ -377,66 +377,66 @@ export default function App() {
 
         {/* Results Card */}
         {result && (
-          <div className={`rounded-[2rem] border p-6 sm:p-8 shadow-sm transition-all duration-500 animate-in fade-in slide-in-from-bottom-4 ${getStatusBg(result.derived_legitimacy)}`}>
+          <div className={`rounded-[2rem] border p-6 sm:p-8 shadow-sm transition-all duration-500 animate-in fade-in slide-in-from-bottom-4 overflow-hidden ${getStatusBg(result.derived_legitimacy)}`}>
             
             {/* Header: Score & Legitimacy */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 mb-8 pb-8 border-b border-black/5">
-              <div className="flex items-center gap-4">
-                <div className="p-4 bg-white/60 rounded-2xl shadow-sm border border-white/50 text-5xl flex items-center justify-center min-w-[80px] min-h-[80px]">
+              <div className="flex items-center gap-4 w-full sm:w-auto min-w-0">
+                <div className="p-4 bg-white/60 rounded-2xl shadow-sm border border-white/50 text-5xl flex items-center justify-center min-w-[80px] min-h-[80px] flex-shrink-0">
                   {getScoreEmoji(legitimacyIndex)}
                 </div>
-                <div>
-                  <h2 className="text-3xl sm:text-4xl font-bold text-slate-800 uppercase tracking-wide">{result.derived_legitimacy}</h2>
-                  <p className="text-slate-700 mt-2 max-w-md leading-relaxed text-lg">{result.summary}</p>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-3xl sm:text-4xl font-bold text-slate-800 uppercase tracking-wide break-words">{result.derived_legitimacy}</h2>
+                  <p className="text-slate-700 mt-2 max-w-md leading-relaxed text-lg break-words">{result.summary}</p>
                 </div>
               </div>
               
-              <div className="text-center bg-white/60 p-4 rounded-2xl shadow-sm border border-white/50 min-w-[140px] w-full sm:w-auto mt-4 sm:mt-0">
-                <div className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-widest">LEGITIMACY INDEX</div>
+              <div className="text-center bg-white/60 p-4 rounded-2xl shadow-sm border border-white/50 min-w-[140px] w-full sm:w-auto mt-4 sm:mt-0 flex-shrink-0">
+                <div className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-widest break-words">LEGITIMACY INDEX</div>
                 <div className="flex items-center justify-center">
                   <div className={`text-4xl font-black ${getScoreColor(legitimacyIndex)}`}>
                     {legitimacyIndex !== null ? `${legitimacyIndex}/100` : '--/100'}
                   </div>
                 </div>
-                <div className="text-[10px] text-slate-500 mt-1 uppercase font-bold tracking-widest">Confidence: {result.confidence_level}</div>
+                <div className="text-[10px] text-slate-500 mt-1 uppercase font-bold tracking-widest break-words">Confidence: {result.confidence_level}</div>
               </div>
             </div>
 
             {/* Pros & Cons Section */}
             <div className="grid sm:grid-cols-2 gap-6 mb-8">
-              <div className="bg-white/60 rounded-2xl p-6 border border-lime-200/50">
-                <h3 className="text-lime-700 font-bold mb-4 flex items-center gap-2 uppercase tracking-wide text-sm">
-                   <div className="w-2 h-2 rounded-full bg-lime-400" /> GREEN FLAGS (PROS)
+              <div className="bg-white/60 rounded-2xl p-6 border border-lime-200/50 min-w-0">
+                <h3 className="text-lime-700 font-bold mb-4 flex items-center gap-2 uppercase tracking-wide text-sm break-words">
+                   <div className="w-2 h-2 rounded-full bg-lime-400 flex-shrink-0" /> GREEN FLAGS (PROS)
                 </h3>
                 <ul className="space-y-3">
                   {result.green_flags && result.green_flags.length > 0 ? result.green_flags.map((pro, i) => (
-                    <li key={i} className="text-slate-800 leading-relaxed pl-5 relative before:content-['>'] before:absolute before:left-0 before:text-lime-500 before:font-bold">{pro}</li>
-                  )) : <li className="text-slate-500 italic">None identified.</li>}
+                    <li key={i} className="text-slate-800 leading-relaxed pl-5 relative before:content-['>'] before:absolute before:left-0 before:text-lime-500 before:font-bold break-words">{pro}</li>
+                  )) : <li className="text-slate-500 italic break-words">None identified.</li>}
                 </ul>
               </div>
 
-              <div className="bg-white/60 rounded-2xl p-6 border border-pink-200/50">
-                <h3 className="text-pink-600 font-bold mb-4 flex items-center gap-2 uppercase tracking-wide text-sm">
-                   <div className="w-2 h-2 rounded-full bg-pink-400" /> RED FLAGS (CONS)
+              <div className="bg-white/60 rounded-2xl p-6 border border-pink-200/50 min-w-0">
+                <h3 className="text-pink-600 font-bold mb-4 flex items-center gap-2 uppercase tracking-wide text-sm break-words">
+                   <div className="w-2 h-2 rounded-full bg-pink-400 flex-shrink-0" /> RED FLAGS (CONS)
                 </h3>
                 <ul className="space-y-3">
                   {result.exhibits && result.exhibits.length > 0 ? result.exhibits.map((con, i) => (
-                    <li key={i} className="text-slate-800 leading-relaxed pl-5 relative before:content-['!'] before:absolute before:left-0 before:text-pink-500 before:font-bold">{con}</li>
-                  )) : <li className="text-slate-500 italic">None identified.</li>}
+                    <li key={i} className="text-slate-800 leading-relaxed pl-5 relative before:content-['!'] before:absolute before:left-0 before:text-pink-500 before:font-bold break-words">{con}</li>
+                  )) : <li className="text-slate-500 italic break-words">None identified.</li>}
                 </ul>
               </div>
             </div>
 
             {/* Personal Fit Analysis */}
-            <div className="bg-white/60 rounded-2xl p-6 sm:p-8 shadow-sm border border-white/50">
-              <h3 className="text-slate-800 font-bold mb-4 flex items-center gap-2 uppercase tracking-wide text-sm">
+            <div className="bg-white/60 rounded-2xl p-6 sm:p-8 shadow-sm border border-white/50 min-w-0">
+              <h3 className="text-slate-800 font-bold mb-4 flex items-center gap-2 uppercase tracking-wide text-sm break-words">
                 LEGITIMACY BREAKDOWN & FIT
               </h3>
               <ul className="space-y-3">
                 {Array.isArray(result.fit_analysis) ? result.fit_analysis.map((point, index) => (
-                  <li key={index} className="text-slate-800 leading-relaxed text-lg pl-6 relative before:content-['•'] before:absolute before:left-0 before:text-purple-500 before:text-xl">{point}</li>
+                  <li key={index} className="text-slate-800 leading-relaxed text-lg pl-6 relative before:content-['•'] before:absolute before:left-0 before:text-purple-500 before:text-xl break-words">{point}</li>
                 )) : (
-                  <li className="text-slate-800 leading-relaxed text-lg pl-6 relative before:content-['•'] before:absolute before:left-0 before:text-purple-500 before:text-xl">{result.fit_analysis}</li>
+                  <li className="text-slate-800 leading-relaxed text-lg pl-6 relative before:content-['•'] before:absolute before:left-0 before:text-purple-500 before:text-xl break-words">{result.fit_analysis}</li>
                 )}
               </ul>
             </div>
@@ -447,8 +447,8 @@ export default function App() {
         {/* Known Job Scams Accordion */}
         <div className="mt-12 pt-8 border-t border-slate-300/40 pb-12">
           <div className="text-center mb-8">
-             <h2 className="text-2xl font-bold text-slate-800 uppercase tracking-wide">COMMON JOB SCAMS TO WATCH OUT FOR</h2>
-             <p className="text-slate-600 mt-2 text-lg">Familiarize yourself with these patterns to stay safe.</p>
+             <h2 className="text-2xl font-bold text-slate-800 uppercase tracking-wide break-words">COMMON JOB SCAMS TO WATCH OUT FOR</h2>
+             <p className="text-slate-600 mt-2 text-lg break-words">Familiarize yourself with these patterns to stay safe.</p>
           </div>
 
           <div className="space-y-4">
@@ -463,9 +463,9 @@ export default function App() {
                     onClick={() => setExpandedScamIndex(isExpanded ? null : index)}
                     className="w-full flex items-start sm:items-center justify-between p-5 sm:p-6 text-left gap-4"
                   >
-                    <div className="flex-1 pr-2 break-words">
-                      <h3 className="font-bold text-slate-800 uppercase tracking-wide text-sm mb-1">{scam.title}</h3>
-                      <p className="text-slate-600 text-sm sm:text-base leading-snug whitespace-normal">{scam.brief}</p>
+                    <div className="flex-1 pr-2 min-w-0">
+                      <h3 className="font-bold text-slate-800 uppercase tracking-wide text-sm mb-1 break-words">{scam.title}</h3>
+                      <p className="text-slate-600 text-sm sm:text-base leading-snug whitespace-normal break-words">{scam.brief}</p>
                     </div>
                     <div className="text-slate-500 flex-shrink-0 mt-1 sm:mt-0">
                       {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
@@ -473,7 +473,7 @@ export default function App() {
                   </button>
                   
                   {isExpanded && (
-                    <div className="px-5 sm:px-6 pb-6 pt-2 text-slate-700 leading-relaxed border-t border-white/40 bg-white/40 text-sm sm:text-base">
+                    <div className="px-5 sm:px-6 pb-6 pt-2 text-slate-700 leading-relaxed border-t border-white/40 bg-white/40 text-sm sm:text-base break-words">
                       {scam.details}
                     </div>
                   )}
