@@ -283,7 +283,7 @@ export default function App() {
           className="flex items-center gap-2 bg-white/60 hover:bg-white/90 backdrop-blur-md border border-pink-200/50 text-pink-600 px-4 py-2 rounded-full font-bold text-sm uppercase tracking-wide transition-all shadow-sm active:scale-95"
         >
           <Heart className="w-4 h-4" />
-          <span>Support Tool</span>
+          <span>Support</span>
         </button>
       </div>
 
