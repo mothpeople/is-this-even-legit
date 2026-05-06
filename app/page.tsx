@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useCallback } from 'react';
-import { AlertOctagon, UploadCloud, X, Search, Lock, Loader2, ChevronDown, ChevronUp, FileText } from 'lucide-react';
+import { AlertOctagon, UploadCloud, X, Search, Lock, Loader2, ChevronDown, ChevronUp, FileText, Heart, Coffee, Wallet } from 'lucide-react';
 
 // --- Types & Interfaces ---
 interface AnalysisResult {
@@ -17,7 +17,7 @@ interface AnalysisResult {
 // --- Backend API Connection ---
 // This safely calls your Next.js backend (route.ts), completely hiding your API keys
 // and leveraging your URL scraper and Claude Fallback logic that already works.
-async function analyzeJobPosting(text: string, base64Image: string | null): Promise<AnalysisResult> {
+async function analyzeJobPosting(text: string, base64Images: string[]): Promise<AnalysisResult> {
   const response = await fetch('/api/analyze', {
     method: 'POST',
     headers: {
@@ -25,7 +25,8 @@ async function analyzeJobPosting(text: string, base64Image: string | null): Prom
     },
     body: JSON.stringify({
       text: text,
-      imageBase64: base64Image // Matches the exact extraction in your route.ts
+      imageBase64: base64Images.length > 0 ? base64Images[0] : null, // Matches the exact extraction in your route.ts
+      imagesBase64: base64Images // Forwarding the full array for when your backend supports multiple
     })
   });
 
@@ -87,13 +88,15 @@ const KNOWN_SCAMS = [
 // --- Main Application Component ---
 export default function App() {
   const [inputText, setInputText] = useState<string>('');
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [previews, setPreviews] = useState<string[]>([]); // Handles multiple files (max 3)
   const [isDragging, setIsDragging] = useState<boolean>(false);
   
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string>('');
   const [expandedScamIndex, setExpandedScamIndex] = useState<number | null>(null);
+  
+  const [isDonateOpen, setIsDonateOpen] = useState<boolean>(false); // Donate modal state
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -107,100 +110,106 @@ export default function App() {
     setIsDragging(false);
   }, []);
 
-  // Client-side image compression & file handler
-  const processFile = (file: File | undefined | null) => {
-    if (!file) return;
+  // Client-side image compression & multi-file handler
+  const processFiles = async (files: FileList | File[] | undefined | null) => {
+    if (!files || files.length === 0) return;
     
-    const isImage = file.type.startsWith('image/');
-    const isPdf = file.type === 'application/pdf';
+    const validFiles = Array.from(files).filter(f => f.type.startsWith('image/') || f.type === 'application/pdf');
+    if (validFiles.length === 0) {
+      setError('Please upload valid image or PDF files.');
+      return;
+    }
 
-    if (!isImage && !isPdf) {
-      setError('Please upload a valid image or PDF file.');
+    if (previews.length + validFiles.length > 3) {
+      setError('You can only upload a maximum of 3 files per scan.');
       return;
     }
     
     setError('');
-    setImagePreview(null);
     
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const rawDataUrl = event.target?.result as string;
-      
-      // If it is a PDF, bypass the image canvas compression completely
-      if (isPdf) {
-        setImagePreview(rawDataUrl);
-        return;
-      }
-      
-      // Otherwise, compress the image for mobile network efficiency
-      const img = new Image();
-      img.onload = () => {
-        try {
-          const canvas = document.createElement('canvas');
-          const MAX_DIMENSION = 1000; 
+    const newPreviews = await Promise.all(validFiles.map(file => {
+      return new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const rawDataUrl = event.target?.result as string;
           
-          let width = img.width;
-          let height = img.height;
-
-          if (width > height && width > MAX_DIMENSION) {
-            height = Math.round(height * (MAX_DIMENSION / width));
-            width = MAX_DIMENSION;
-          } else if (height > MAX_DIMENSION) {
-            width = Math.round(width * (MAX_DIMENSION / height));
-            height = MAX_DIMENSION;
+          // If it is a PDF, bypass the image canvas compression completely
+          if (file.type === 'application/pdf') {
+            resolve(rawDataUrl);
+            return;
           }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
           
-          if (ctx) {
-             ctx.fillStyle = '#FFFFFF';
-             ctx.fillRect(0, 0, width, height);
-             ctx.drawImage(img, 0, 0, width, height);
-             const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
-             
-             if (compressedBase64 && compressedBase64.length > 50) {
-                 setImagePreview(compressedBase64);
-             } else {
-                 setImagePreview(rawDataUrl); 
-             }
-          } else {
-             setImagePreview(rawDataUrl); 
-          }
-        } catch (e) {
-          setImagePreview(rawDataUrl);
-        }
-      };
-      
-      img.onerror = () => {
-        setImagePreview(rawDataUrl);
-      };
-      
-      img.src = rawDataUrl;
-    };
-    reader.readAsDataURL(file);
+          // Otherwise, compress the image for mobile network efficiency
+          const img = new Image();
+          img.onload = () => {
+            try {
+              const canvas = document.createElement('canvas');
+              const MAX_DIMENSION = 1000; 
+              
+              let width = img.width;
+              let height = img.height;
+
+              if (width > height && width > MAX_DIMENSION) {
+                height = Math.round(height * (MAX_DIMENSION / width));
+                width = MAX_DIMENSION;
+              } else if (height > MAX_DIMENSION) {
+                width = Math.round(width * (MAX_DIMENSION / height));
+                height = MAX_DIMENSION;
+              }
+
+              canvas.width = width;
+              canvas.height = height;
+              const ctx = canvas.getContext('2d');
+              
+              if (ctx) {
+                 ctx.fillStyle = '#FFFFFF';
+                 ctx.fillRect(0, 0, width, height);
+                 ctx.drawImage(img, 0, 0, width, height);
+                 const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+                 
+                 if (compressedBase64 && compressedBase64.length > 50) {
+                     resolve(compressedBase64);
+                 } else {
+                     resolve(rawDataUrl); 
+                 }
+              } else {
+                 resolve(rawDataUrl); 
+              }
+            } catch (e) {
+              resolve(rawDataUrl);
+            }
+          };
+          
+          img.onerror = () => {
+            resolve(rawDataUrl);
+          };
+          
+          img.src = rawDataUrl;
+        };
+        reader.readAsDataURL(file);
+      });
+    }));
+
+    setPreviews(prev => [...prev, ...newPreviews]);
   };
 
   const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragging(false);
-    const file = e.dataTransfer.files[0];
-    processFile(file);
-  }, []);
+    processFiles(e.dataTransfer.files);
+  }, [previews]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    processFile(file);
+    processFiles(e.target.files);
   };
 
-  const removeImage = () => {
-    setImagePreview(null);
+  const removeImage = (indexToRemove: number) => {
+    setPreviews(prev => prev.filter((_, idx) => idx !== indexToRemove));
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleAnalyze = async () => {
-    if (!inputText.trim() && !imagePreview) {
+    if (!inputText.trim() && previews.length === 0) {
       setError('Please provide text, a URL, or a file to analyze.');
       return;
     }
@@ -210,7 +219,7 @@ export default function App() {
     setResult(null);
 
     try {
-      const analysisResult = await analyzeJobPosting(inputText, imagePreview);
+      const analysisResult = await analyzeJobPosting(inputText, previews);
       setResult(analysisResult);
     } catch (err: any) {
       setError(err.message || 'A network error occurred while reaching your backend server.');
@@ -259,8 +268,19 @@ export default function App() {
   return (
     <div className="min-h-screen relative font-sans text-slate-800 p-4 sm:p-8 selection:bg-blue-200 selection:text-blue-900 flex flex-col items-center overflow-x-hidden">
       
+      {/* Top Nav / Support Button */}
+      <div className="w-full max-w-2xl flex justify-end mb-2 sm:mb-0">
+        <button 
+          onClick={() => setIsDonateOpen(true)}
+          className="flex items-center gap-2 bg-white/60 hover:bg-white/90 backdrop-blur-md border border-pink-200/50 text-pink-600 px-4 py-2 rounded-full font-bold text-sm uppercase tracking-wide transition-all shadow-sm active:scale-95"
+        >
+          <Heart className="w-4 h-4" />
+          <span>Support Tool</span>
+        </button>
+      </div>
+
       {/* Header and Intro */}
-      <div className="max-w-2xl w-full mb-8 mt-4 sm:mt-8 flex flex-col items-center justify-center text-center">
+      <div className="max-w-2xl w-full mb-8 mt-2 sm:mt-4 flex flex-col items-center justify-center text-center">
         <div className="flex flex-row items-center justify-center gap-3 sm:gap-4 mb-4">
           <div className="text-5xl sm:text-6xl filter drop-shadow-sm flex-shrink-0">
             🤔
@@ -289,41 +309,46 @@ export default function App() {
           <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent pointer-events-none rounded-[2rem]" />
 
           <div className="relative p-6 sm:p-8">
-            <div className="flex items-center gap-2 mb-4 text-blue-700 font-bold tracking-widest uppercase text-sm">
-              <Lock className="w-4 h-4" />
+            <div className="flex items-center gap-2 mb-4 text-blue-700 font-bold tracking-widest uppercase text-sm flex-wrap">
+              <Lock className="w-4 h-4 flex-shrink-0" />
               <span>SCAN FOR LEGITIMACY</span>
+              <span className="text-blue-400 ml-auto text-xs font-medium lowercase">(max 3 files)</span>
             </div>
 
             <textarea
               className="w-full bg-transparent resize-none outline-none text-lg sm:text-xl placeholder-slate-400 min-h-[120px] sm:min-h-[100px] leading-relaxed"
-              placeholder="Paste a URL, job description, or email message. Or upload a screenshot or PDF below..."
+              placeholder="Paste a URL, job description, or email message. Or upload up to 3 files (screenshots or PDFs) below..."
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               disabled={isAnalyzing}
             />
 
-            {/* Preview Area (Handles Image AND PDF) */}
-            {imagePreview && (
-              <div className="relative mt-4 inline-block">
-                {imagePreview.startsWith('data:application/pdf') ? (
-                  <div className="h-32 w-32 bg-slate-100 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center justify-center text-slate-500 gap-2">
-                    <FileText className="w-8 h-8 text-blue-500" />
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-600">PDF Attached</span>
+            {/* Preview Area (Handles Multi-Image AND PDF) */}
+            {previews.length > 0 && (
+              <div className="flex flex-wrap gap-4 mt-4">
+                {previews.map((preview, idx) => (
+                  <div key={idx} className="relative inline-block animate-in fade-in zoom-in-95 duration-300">
+                    {preview.startsWith('data:application/pdf') ? (
+                      <div className="h-28 w-28 bg-slate-100 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center justify-center text-slate-500 gap-2">
+                        <FileText className="w-8 h-8 text-blue-500" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 text-center px-2">PDF Attached</span>
+                      </div>
+                    ) : (
+                      <img 
+                        src={preview} 
+                        alt={`Upload ${idx + 1}`} 
+                        className="h-28 w-28 object-cover rounded-xl border border-slate-200 shadow-sm"
+                      />
+                    )}
+                    <button 
+                      onClick={() => removeImage(idx)}
+                      className="absolute -top-2 -right-2 bg-slate-800 text-white p-1.5 rounded-full hover:bg-pink-500 transition-colors shadow-md z-10"
+                      disabled={isAnalyzing}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
                   </div>
-                ) : (
-                  <img 
-                    src={imagePreview} 
-                    alt="Job posting snippet" 
-                    className="h-32 object-cover rounded-xl border border-slate-200 shadow-sm"
-                  />
-                )}
-                <button 
-                  onClick={removeImage}
-                  className="absolute -top-2 -right-2 bg-slate-800 text-white p-1.5 rounded-full hover:bg-pink-500 transition-colors shadow-md"
-                  disabled={isAnalyzing}
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                ))}
               </div>
             )}
 
@@ -339,24 +364,25 @@ export default function App() {
                 <input 
                   type="file" 
                   accept="image/*,application/pdf" 
+                  multiple
                   className="hidden" 
                   ref={fileInputRef}
                   onChange={handleFileSelect}
-                  disabled={isAnalyzing}
+                  disabled={isAnalyzing || previews.length >= 3}
                 />
                 <button 
                   onClick={() => fileInputRef.current?.click()}
                   className="w-full sm:w-auto flex items-center justify-center gap-2 text-slate-600 hover:text-blue-700 transition-colors px-4 py-3.5 rounded-xl hover:bg-white/60 font-bold tracking-wide uppercase text-sm disabled:opacity-50 border border-transparent hover:border-blue-200/50"
-                  disabled={isAnalyzing}
+                  disabled={isAnalyzing || previews.length >= 3}
                 >
                   <UploadCloud className="w-5 h-5" />
-                  <span>UPLOAD FILE / PDF</span>
+                  <span>UPLOAD FILES / PDFS</span>
                 </button>
               </div>
               
               <button
                 onClick={handleAnalyze}
-                disabled={isAnalyzing || (!inputText.trim() && !imagePreview)}
+                disabled={isAnalyzing || (!inputText.trim() && previews.length === 0)}
                 className="w-full sm:w-auto flex items-center justify-center gap-2 bg-blue-300/80 hover:bg-blue-400 disabled:bg-slate-200/50 disabled:text-slate-400 text-blue-900 px-8 py-3.5 rounded-xl font-bold tracking-wide uppercase text-sm shadow-sm transition-all active:scale-95"
               >
                 {isAnalyzing ? (
@@ -484,9 +510,79 @@ export default function App() {
         </div>
 
       </main>
+
+      {/* --- DONATE MODAL --- */}
+      {isDonateOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            onClick={() => setIsDonateOpen(false)}
+          />
+          
+          {/* Modal Content */}
+          <div className="relative bg-white/80 backdrop-blur-2xl border border-white/80 rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200">
+            <button 
+              onClick={() => setIsDonateOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 p-2 rounded-full transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="text-center mb-8 mt-2">
+              <div className="w-16 h-16 bg-pink-100 text-pink-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
+                <Heart className="w-8 h-8 fill-pink-500" />
+              </div>
+              <h2 className="text-2xl font-bold text-slate-800 uppercase tracking-wide mb-2">Keep This Free</h2>
+              <p className="text-slate-600 leading-relaxed">
+                "Is This Even Legit?" is completely free to use. If it saved you from a scam, consider chipping in to help cover the heavy backend API and AI hosting costs.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              {/* Fiat Option */}
+              <a 
+                href="YOUR_STRIPE_OR_BUY_ME_A_COFFEE_LINK_HERE" 
+                target="_blank" 
+                rel="noreferrer"
+                className="w-full flex items-center p-4 bg-white hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-2xl transition-all group"
+              >
+                <div className="bg-blue-100 p-3 rounded-xl text-blue-600 mr-4 group-hover:scale-110 transition-transform">
+                  <Coffee className="w-6 h-6" />
+                </div>
+                <div className="text-left">
+                  <div className="font-bold text-slate-800 uppercase text-sm tracking-wide">Buy Me a Coffee</div>
+                  <div className="text-slate-500 text-sm">Credit Card, Apple Pay, PayPal</div>
+                </div>
+              </a>
+
+              {/* Stablecoin/Crypto Option */}
+              <div className="w-full flex items-center p-4 bg-white border border-slate-200 rounded-2xl">
+                <div className="bg-emerald-100 p-3 rounded-xl text-emerald-600 mr-4 flex-shrink-0">
+                  <Wallet className="w-6 h-6" />
+                </div>
+                <div className="text-left flex-1 min-w-0">
+                  <div className="font-bold text-slate-800 uppercase text-sm tracking-wide">USDC / Crypto</div>
+                  <div className="text-slate-400 text-xs mt-1 truncate">0xYourWalletAddressHere...</div>
+                </div>
+                <button 
+                  onClick={() => navigator.clipboard.writeText("0xYourWalletAddressHere")}
+                  className="ml-2 bg-slate-100 hover:bg-emerald-100 text-slate-600 hover:text-emerald-700 px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-colors flex-shrink-0"
+                >
+                  Copy
+                </button>
+              </div>
+            </div>
+            
+            <p className="text-center text-xs text-slate-400 mt-6 font-medium">
+              Thank you for supporting independent tools. 🚀
+            </p>
+          </div>
+        </div>
+      )}
       
       {/* Locked Pastel Background Decor */}
-      <div className="fixed inset-0 -z-10 pointer-events-none overflow-hidden bg-[#fbf9ff]">
+      <div className="fixed inset-0 -z-20 pointer-events-none overflow-hidden bg-[#fbf9ff]">
         <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full bg-blue-300/50 blur-[120px]" />
         <div className="absolute top-[10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-pink-300/50 blur-[120px]" />
         <div className="absolute bottom-[-10%] left-[10%] w-[50%] h-[50%] rounded-full bg-yellow-300/50 blur-[120px]" />

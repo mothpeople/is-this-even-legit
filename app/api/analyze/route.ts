@@ -3,7 +3,8 @@ import * as cheerio from 'cheerio';
 
 export async function POST(req: Request) {
   try {
-    const { text, imageBase64 } = await req.json();
+    // Extract imagesBase64 (array) along with legacy imageBase64 (string)
+    const { text, imageBase64, imagesBase64 } = await req.json();
     const cleanText = (text || "").trim();
 
     const isUrlRegex = /^(https?:\/\/)?([\w\d-]+\.)+[\w\d]{2,}(\/.*)?$/i;
@@ -87,7 +88,7 @@ export async function POST(req: Request) {
     `;
 
     let prompt = `
-      Input Data: ${cleanText || "See attached document/image."}
+      Input Data: ${cleanText || "See attached document/image(s)."}
       Is the input strictly a single URL?: ${isJustUrl}
       Scraped Website Text (if URL): ${scrapedContent || "N/A"}
       Hard Forensic Data: ${threatIntel || "N/A"}
@@ -115,18 +116,25 @@ export async function POST(req: Request) {
          prompt += "\n\nNote: Our initial local filter flagged potential scam keywords. Please investigate deeply.";
     }
 
-    let mimeType = "";
-    let cleanBase64 = "";
-    
-    if (imageBase64) {
-      if (imageBase64.includes(';base64,')) {
-        mimeType = imageBase64.split(';base64,')[0].replace('data:', '');
-        cleanBase64 = imageBase64.split(';base64,')[1];
-      } else {
-        mimeType = "image/png";
-        cleanBase64 = imageBase64;
-      }
+    // --- NORMALIZING MULTI-FILE PAYLOAD ---
+    let rawFiles: string[] = [];
+    if (imagesBase64 && Array.isArray(imagesBase64) && imagesBase64.length > 0) {
+      rawFiles = imagesBase64;
+    } else if (imageBase64) {
+      // Fallback for older frontend versions
+      rawFiles = [imageBase64];
     }
+
+    // Parse MIME types and isolate raw base64 data for all files
+    const parsedFiles = rawFiles.map(raw => {
+      let mime = "image/png";
+      let data = raw;
+      if (raw.includes(';base64,')) {
+        mime = raw.split(';base64,')[0].replace('data:', '');
+        data = raw.split(';base64,')[1];
+      }
+      return { mime, data };
+    });
 
     try {
       const geminiApiKey = process.env.GEMINI_API_KEY;
@@ -138,9 +146,12 @@ export async function POST(req: Request) {
         systemInstruction: { parts: [{ text: systemInstruction }] }
       };
 
-      if (cleanBase64) {
-        geminiBody.contents[0].parts.push({
-          inlineData: { mimeType: mimeType, data: cleanBase64 }
+      // Append all parsed files to Gemini's payload
+      if (parsedFiles.length > 0) {
+        parsedFiles.forEach(file => {
+          geminiBody.contents[0].parts.push({
+            inlineData: { mimeType: file.mime, data: file.data }
+          });
         });
       }
 
@@ -165,16 +176,28 @@ export async function POST(req: Request) {
       if (!claudeApiKey) throw new Error("Both Gemini failed and Claude API key is missing.");
 
       const claudeContent: any[] = [{ type: "text", text: prompt }];
+      let hasPdf = false;
 
-      if (cleanBase64) {
-        if (mimeType.startsWith("image/")) {
-          claudeContent.unshift({
-            type: "image",
-            source: { type: "base64", media_type: mimeType, data: cleanBase64 }
-          });
-        } else {
-          claudeContent[0].text += "\n\n[Note: A PDF document was uploaded but could not be parsed by the offline fallback engine. Rely on text forensics.]";
+      // Append all parsed files to Claude's payload
+      if (parsedFiles.length > 0) {
+        const imageBlocks: any[] = [];
+        parsedFiles.forEach(file => {
+          if (file.mime.startsWith("image/")) {
+            imageBlocks.push({
+              type: "image",
+              source: { type: "base64", media_type: file.mime, data: file.data }
+            });
+          } else {
+            hasPdf = true;
+          }
+        });
+        
+        if (hasPdf) {
+          claudeContent[0].text += "\n\n[Note: One or more PDF documents were uploaded but could not be parsed by the offline fallback engine. Rely on text forensics.]";
         }
+        
+        // Add image blocks to the beginning of the content array
+        claudeContent.unshift(...imageBlocks);
       }
 
       const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
