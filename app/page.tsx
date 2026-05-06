@@ -120,14 +120,22 @@ export default function App() {
       return;
     }
 
-    if (previews.length + validFiles.length > 3) {
-      setError('You can only upload a maximum of 3 files per scan.');
+    // --- FIX 1: Enforce hard limit of 3 files total ---
+    const availableSlots = 3 - previews.length;
+    if (availableSlots <= 0) {
+      setError('You have reached the maximum limit of 3 files.');
       return;
     }
+
+    let filesToProcess = validFiles;
+    if (validFiles.length > availableSlots) {
+      setError(`Maximum 3 files allowed. Only the first ${availableSlots} were added.`);
+      filesToProcess = validFiles.slice(0, availableSlots);
+    } else {
+      setError('');
+    }
     
-    setError('');
-    
-    const newPreviews = await Promise.all(validFiles.map(file => {
+    const newPreviews = await Promise.all(filesToProcess.map(file => {
       return new Promise<string>((resolve) => {
         const reader = new FileReader();
         reader.onload = (event) => {
@@ -141,7 +149,10 @@ export default function App() {
           
           // Otherwise, compress the image for mobile network efficiency
           const img = new Image();
-          img.onload = () => {
+          img.src = rawDataUrl;
+
+          // --- FIX 2: Wait for mobile GPU to decode massive images to prevent blank white squares ---
+          img.decode().then(() => {
             try {
               const canvas = document.createElement('canvas');
               const MAX_DIMENSION = 1000; 
@@ -178,13 +189,10 @@ export default function App() {
             } catch (e) {
               resolve(rawDataUrl);
             }
-          };
-          
-          img.onerror = () => {
+          }).catch(() => {
+            // Fallback to raw data if decoding fails
             resolve(rawDataUrl);
-          };
-          
-          img.src = rawDataUrl;
+          });
         };
         reader.readAsDataURL(file);
       });
