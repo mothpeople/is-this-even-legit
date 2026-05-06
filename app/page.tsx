@@ -521,7 +521,7 @@ export default function App() {
           />
           
           {/* Modal Content */}
-          <div className="relative bg-white/80 backdrop-blur-2xl border border-white/80 rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200">
+          <div className="relative bg-white/80 backdrop-blur-2xl border border-white/80 rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
             <button 
               onClick={() => setIsDonateOpen(false)}
               className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 p-2 rounded-full transition-colors"
@@ -529,12 +529,12 @@ export default function App() {
               <X className="w-5 h-5" />
             </button>
 
-            <div className="text-center mb-8 mt-2">
+            <div className="text-center mb-6 mt-2">
               <div className="w-16 h-16 bg-pink-100 text-pink-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
                 <Heart className="w-8 h-8 fill-pink-500" />
               </div>
               <h2 className="text-2xl font-bold text-slate-800 uppercase tracking-wide mb-2">Keep This Free</h2>
-              <p className="text-slate-600 leading-relaxed">
+              <p className="text-slate-600 leading-relaxed text-sm sm:text-base">
                 "Is This Even Legit?" is completely free to use. If it saved you from a scam, consider chipping in to help cover the heavy backend API and AI hosting costs.
               </p>
             </div>
@@ -542,35 +542,70 @@ export default function App() {
             <div className="space-y-4">
               {/* Fiat Option */}
               <a 
-                href="YOUR_STRIPE_OR_BUY_ME_A_COFFEE_LINK_HERE" 
+                href="https://paypal.me/sivarajpragasm" 
                 target="_blank" 
                 rel="noreferrer"
                 className="w-full flex items-center p-4 bg-white hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-2xl transition-all group"
               >
-                <div className="bg-blue-100 p-3 rounded-xl text-blue-600 mr-4 group-hover:scale-110 transition-transform">
+                <div className="bg-blue-100 p-3 rounded-xl text-blue-600 mr-4 group-hover:scale-110 transition-transform flex-shrink-0">
                   <Coffee className="w-6 h-6" />
                 </div>
                 <div className="text-left">
-                  <div className="font-bold text-slate-800 uppercase text-sm tracking-wide">Buy Me a Coffee</div>
-                  <div className="text-slate-500 text-sm">Credit Card, Apple Pay, PayPal</div>
+                  <div className="font-bold text-slate-800 uppercase text-sm tracking-wide">PayPal</div>
+                  <div className="text-slate-500 text-sm">Support via PayPal.me</div>
                 </div>
               </a>
 
               {/* Stablecoin/Crypto Option */}
-              <div className="w-full flex items-center p-4 bg-white border border-slate-200 rounded-2xl">
-                <div className="bg-emerald-100 p-3 rounded-xl text-emerald-600 mr-4 flex-shrink-0">
-                  <Wallet className="w-6 h-6" />
+              <div className="w-full p-4 bg-white border border-slate-200 rounded-2xl space-y-4">
+                <div className="flex items-center mb-2">
+                  <div className="bg-emerald-100 p-2 rounded-xl text-emerald-600 mr-3 flex-shrink-0">
+                    <Wallet className="w-5 h-5" />
+                  </div>
+                  <div className="font-bold text-slate-800 uppercase text-sm tracking-wide">USDC / USDT / Crypto</div>
                 </div>
-                <div className="text-left flex-1 min-w-0">
-                  <div className="font-bold text-slate-800 uppercase text-sm tracking-wide">USDC / Crypto</div>
-                  <div className="text-slate-400 text-xs mt-1 truncate">0xYourWalletAddressHere...</div>
+                
+                {/* EVM Address */}
+                <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl">
+                  <div className="min-w-0 pr-2">
+                    <div className="text-xs font-bold text-slate-700 uppercase">ETH / Base / Arb / BSC</div>
+                    <div className="text-slate-500 text-[10px] sm:text-xs truncate">0xa4c64896d499570dc122a05fa12d9362baec3a66</div>
+                  </div>
+                  <button 
+                    onClick={() => navigator.clipboard.writeText("0xa4c64896d499570dc122a05fa12d9362baec3a66")}
+                    className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-colors flex-shrink-0"
+                  >
+                    Copy
+                  </button>
                 </div>
-                <button 
-                  onClick={() => navigator.clipboard.writeText("0xYourWalletAddressHere")}
-                  className="ml-2 bg-slate-100 hover:bg-emerald-100 text-slate-600 hover:text-emerald-700 px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-colors flex-shrink-0"
-                >
-                  Copy
-                </button>
+
+                {/* Solana Address */}
+                <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl">
+                  <div className="min-w-0 pr-2">
+                    <div className="text-xs font-bold text-slate-700 uppercase">Solana</div>
+                    <div className="text-slate-500 text-[10px] sm:text-xs truncate">B6hf4f1Y7vX4SbBT9enVPvVdRmiH3Ht2CKQPyq3jx7LH</div>
+                  </div>
+                  <button 
+                    onClick={() => navigator.clipboard.writeText("B6hf4f1Y7vX4SbBT9enVPvVdRmiH3Ht2CKQPyq3jx7LH")}
+                    className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-colors flex-shrink-0"
+                  >
+                    Copy
+                  </button>
+                </div>
+
+                {/* TRON Address */}
+                <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl">
+                  <div className="min-w-0 pr-2">
+                    <div className="text-xs font-bold text-slate-700 uppercase">TRON</div>
+                    <div className="text-slate-500 text-[10px] sm:text-xs truncate">TKW86MoaVT8b6NAcUa6GF7xePhkzWcttBt</div>
+                  </div>
+                  <button 
+                    onClick={() => navigator.clipboard.writeText("TKW86MoaVT8b6NAcUa6GF7xePhkzWcttBt")}
+                    className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-colors flex-shrink-0"
+                  >
+                    Copy
+                  </button>
+                </div>
               </div>
             </div>
             
