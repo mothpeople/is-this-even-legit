@@ -1,5 +1,12 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
+
+export const viewport: Viewport = {
+  themeColor: "#fbf9ff",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+};
 
 // This metadata object controls what shows up in Google Search, browser tabs, 
 // and link previews on WhatsApp, iMessage, Twitter, LinkedIn, etc.
